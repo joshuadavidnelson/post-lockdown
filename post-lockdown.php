@@ -87,7 +87,7 @@ class PostLockdown {
 	 * Sets the capability to false when current_user_can() has been called on
 	 * one of the capabilities we're interested in on a locked or protected post.
 	 */
-	public function filter_cap( $allcaps, $cap, $args ) {
+	public function filter_cap( array $allcaps, array $cap, array $args ) {
 		if ( ! $this->have_posts() ) {
 			return $allcaps;
 		}
@@ -98,14 +98,14 @@ class PostLockdown {
 		] );
 
 		// If it's not a capability we're interested in get out of here.
-		if ( ! isset( $the_caps[$args[0]] ) ) {
+		if ( ! isset( $the_caps[ $args[0] ] ) ) {
 			return $allcaps;
 		}
 
 		/* If the user has the required capability to bypass
 		 * restrictions get out of here.
 		 */
-		if ( ! empty( $allcaps[$this->get_admin_cap()] ) ) {
+		if ( ! empty( $allcaps[ $this->get_admin_cap() ] ) ) {
 			return $allcaps;
 		}
 
@@ -115,11 +115,13 @@ class PostLockdown {
 			return $allcaps;
 		}
 
-		if ( 'edit_post' === $args[0] ) {
-			$allcaps[$cap[0]] = ! $this->is_post_locked( $post_id );
-		} else {
-			$allcaps[$cap[0]] = ( ! $this->is_post_protected( $post_id ) && ! $this->is_post_locked( $post_id ) );
+		$has_cap = ! $this->is_post_locked( $post_id );
+
+		if ( $has_cap && 'edit_post' !== $args[0] ) {
+			$has_cap = ! $this->is_post_protected( $post_id );
 		}
+
+		$allcaps[ $cap[0] ] = $has_cap;
 
 		return $allcaps;
 	}
@@ -131,7 +133,7 @@ class PostLockdown {
 	 * Also reverts any date changes if they're set to a future date. If anything is changed a filter for
 	 * the 'redirect_post_location' hook is added to display an admin notice letting the user know we reverted it.
 	 */
-	public function prevent_status_change( $data, $postarr ) {
+	public function prevent_status_change( array $data, array $postarr ) {
 		/* If the user has the required capability to bypass
 		 * restrictions or there are no locked or protected posts get out of here.
 		 */
@@ -191,7 +193,7 @@ class PostLockdown {
 	 * Outputs the plugin's admin notices if there are any.
 	 */
 	public function output_admin_notices() {
-		$notices = [ ];
+		$notices = [];
 
 		if ( $this->filter_input( self::QUERY_ARG ) ) {
 			$notices[] = [
@@ -237,10 +239,10 @@ class PostLockdown {
 
 		wp_enqueue_style( self::KEY, $assets_path . 'css/postlockdown' . $ext . '.css', null, null );
 
-		wp_enqueue_script( 'plmultiselect', $assets_path . 'js/jquery.plmultiselect' . $ext . '.js', ['jquery-ui-autocomplete' ], null, true );
-		wp_enqueue_script( self::KEY, $assets_path . 'js/postlockdown' . $ext . '.js', ['plmultiselect' ], null, true );
+		wp_enqueue_script( 'plmultiselect', $assets_path . 'js/jquery.plmultiselect' . $ext . '.js', [ 'jquery-ui-autocomplete' ], null, true );
+		wp_enqueue_script( self::KEY, $assets_path . 'js/postlockdown' . $ext . '.js', [ 'plmultiselect' ], null, true );
 
-		$data = [ ];
+		$data = [];
 
 		if ( $this->have_posts() ) {
 			$posts = $this->get_posts( [
@@ -268,7 +270,7 @@ class PostLockdown {
 	 * Removes the deleted post's ID from both locked and protected arrays.
 	 */
 	public function update_option( $post_id ) {
-		unset( $this->locked_post_ids[$post_id], $this->protected_post_ids[$post_id] );
+		unset( $this->locked_post_ids[ $post_id ], $this->protected_post_ids[ $post_id ] );
 
 		update_option( self::KEY, [
 			'locked_post_ids' => $this->locked_post_ids,
@@ -277,7 +279,7 @@ class PostLockdown {
 	}
 
 	/**
-	 * Callback for register_uninstall_hook() function.
+	 * Callback for register_uninstall_hook() function. Must be static.
 	 *
 	 * Removes the plugin option from the database when it is uninstalled.
 	 */
@@ -309,7 +311,7 @@ class PostLockdown {
 	 * @return bool
 	 */
 	public function is_post_locked( $post_id ) {
-		return isset( $this->get_locked_post_ids()[$post_id] );
+		return isset( $this->get_locked_post_ids()[ $post_id ] );
 	}
 
 	/**
@@ -319,7 +321,7 @@ class PostLockdown {
 	 * @return bool
 	 */
 	public function is_post_protected( $post_id ) {
-		return isset( $this->get_protected_post_ids()[$post_id] );
+		return isset( $this->get_protected_post_ids()[ $post_id ] );
 	}
 
 	/**
@@ -339,7 +341,7 @@ class PostLockdown {
 	 *
 	 */
 	private function load_options() {
-		$options = get_option( self::KEY, [ ] );
+		$options = get_option( self::KEY, [] );
 
 		if ( ! empty( $options['locked_post_ids'] ) && is_array( $options['locked_post_ids'] ) ) {
 			$this->locked_post_ids = $options['locked_post_ids'];
@@ -356,7 +358,7 @@ class PostLockdown {
 	 * @param array $args Array of args to merge with defaults passed to get_posts().
 	 * @return array Array of posts.
 	 */
-	private function get_posts( $args = [ ] ) {
+	private function get_posts( $args = [] ) {
 		$excluded_post_types = [ 'nav_menu_item', 'revision' ];
 
 		if ( class_exists( 'WooCommerce' ) ) {
