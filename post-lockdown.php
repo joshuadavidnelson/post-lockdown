@@ -74,7 +74,6 @@ class PostLockdown {
 
 		add_filter( 'removable_query_args', function( $args ) {
 			$args[] = self::QUERY_ARG;
-
 			return $args;
 		} );
 
