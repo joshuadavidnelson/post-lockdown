@@ -9,7 +9,7 @@
  * Text Domain: postlockdown
  */
 if ( is_admin() ) {
-	add_action( 'init', array( 'PostLockdown', 'get_instance' ), 99 );
+	add_action( 'init', [ 'PostLockdown', 'get_instance' ], 99 );
 }
 
 class PostLockdown {
@@ -24,10 +24,10 @@ class PostLockdown {
 	const QUERY_ARG = 'plstatuschange';
 
 	/** @var array List of post IDs which cannot be edited, trashed or deleted. */
-	private $locked_post_ids = array();
+	private $locked_post_ids = [];
 
 	/** @var array List of post IDs which cannot be trashed or deleted. */
-	private $protected_post_ids = array();
+	private $protected_post_ids = [];
 
 	/** @var string Page hook returned by add_options_page(). */
 	private $page_hook;
@@ -51,22 +51,34 @@ class PostLockdown {
 	private function __construct() {
 		$this->load_options();
 
-		add_action( 'admin_init', array( $this, 'register_setting' ) );
+		add_action( 'admin_init', function() {
+			register_setting( self::KEY, self::KEY );
+		} );
 
-		add_action( 'admin_menu', array( $this, 'add_options_page' ) );
-		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
-		add_action( 'wp_ajax_pl_autocomplete', array( $this, 'ajax_autocomplete' ) );
+		add_action( 'admin_menu', function() {
+			$this->page_hook = add_options_page( self::TITLE, self::TITLE, $this->get_admin_cap(), self::KEY, function() {
+				include_once( plugin_dir_path( __FILE__ ) . 'view/options-page.php' );
+			} );
+		} );
 
-		add_filter( 'option_page_capability_' . self::KEY, array( $this, 'get_admin_cap' ) );
+		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_scripts' ] );
+		add_action( 'wp_ajax_pl_autocomplete', [ $this, 'ajax_autocomplete' ] );
 
-		add_action( 'admin_notices', array( $this, 'output_admin_notices' ) );
-		add_action( 'delete_post', array( $this, 'update_option' ) );
+		add_filter( 'option_page_capability_' . self::KEY, [ $this, 'get_admin_cap' ] );
 
-		add_filter( 'user_has_cap', array( $this, 'filter_cap' ), 10, 3 );
-		add_filter( 'wp_insert_post_data', array( $this, 'prevent_status_change' ), 10, 2 );
-		add_filter( 'removable_query_args', array( $this, 'remove_query_arg' ) );
+		add_action( 'admin_notices', [ $this, 'output_admin_notices' ] );
+		add_action( 'delete_post', [ $this, 'update_option' ] );
 
-		register_uninstall_hook( __FILE__, array( __CLASS__, 'uninstall' ) );
+		add_filter( 'user_has_cap', [ $this, 'filter_cap' ], 10, 3 );
+		add_filter( 'wp_insert_post_data', [ $this, 'prevent_status_change' ], 10, 2 );
+
+		add_filter( 'removable_query_args', function( $args ) {
+			$args[] = self::QUERY_ARG;
+
+			return $args;
+		} );
+
+		register_uninstall_hook( __FILE__, [ __CLASS__, 'uninstall' ] );
 	}
 
 	/**
@@ -80,20 +92,20 @@ class PostLockdown {
 			return $allcaps;
 		}
 
-		$the_caps = apply_filters( 'postlockdown_capabilities', array(
+		$the_caps = apply_filters( 'postlockdown_capabilities', [
 			'delete_post' => true,
 			'edit_post' => true,
-		) );
+		] );
 
 		// If it's not a capability we're interested in get out of here.
-		if ( ! isset( $the_caps[ $args[0] ] ) ) {
+		if ( ! isset( $the_caps[$args[0]] ) ) {
 			return $allcaps;
 		}
 
 		/* If the user has the required capability to bypass
 		 * restrictions get out of here.
 		 */
-		if ( ! empty( $allcaps[ $this->get_admin_cap() ] ) ) {
+		if ( ! empty( $allcaps[$this->get_admin_cap()] ) ) {
 			return $allcaps;
 		}
 
@@ -104,9 +116,9 @@ class PostLockdown {
 		}
 
 		if ( 'edit_post' === $args[0] ) {
-			$allcaps[ $cap[0] ] = ! $this->is_post_locked( $post_id );
+			$allcaps[$cap[0]] = ! $this->is_post_locked( $post_id );
 		} else {
-			$allcaps[ $cap[0] ] = ( ! $this->is_post_protected( $post_id ) && ! $this->is_post_locked( $post_id ) );
+			$allcaps[$cap[0]] = ( ! $this->is_post_protected( $post_id ) && ! $this->is_post_locked( $post_id ) );
 		}
 
 		return $allcaps;
@@ -165,33 +177,12 @@ class PostLockdown {
 		}
 
 		if ( $changed ) {
-			add_filter( 'redirect_post_location', array( $this, 'redirect_post_location' ) );
+			add_filter( 'redirect_post_location', function( $location ) {
+				return add_query_arg( self::QUERY_ARG, 1, $location );
+			} );
 		}
 
 		return $data;
-	}
-
-	/**
-	 * Filter for the 'redirect_post_location' hook.
-	 *
-	 * Adds the plugin's query arg to the redirect URI when
-	 * the status of a protected post changes to indicate that
-	 * an error message should be displayed.
-	 */
-	public function redirect_post_location( $location ) {
-		return add_query_arg( self::QUERY_ARG, 1, $location );
-	}
-
-	/**
-	 * Filter for the 'removable_query_args' hook.
-	 *
-	 * Adds the plugin's query arg to the array of args
-	 * removed by WordPress using the JavaScript History API.
-	 */
-	public function remove_query_arg( $args ) {
-		$args[] = self::QUERY_ARG;
-
-		return $args;
 	}
 
 	/**
@@ -200,14 +191,13 @@ class PostLockdown {
 	 * Outputs the plugin's admin notices if there are any.
 	 */
 	public function output_admin_notices() {
-		$notices = array();
+		$notices = [ ];
 
 		if ( $this->filter_input( self::QUERY_ARG ) ) {
-
-			$notices[] = array(
+			$notices[] = [
 				'class' => 'error',
 				'message' => esc_html( 'This post is protected by Post Lockdown and must stay published.', 'postlockdown' ),
-			);
+			];
 		}
 
 		if ( ! empty( $notices ) ) {
@@ -216,43 +206,16 @@ class PostLockdown {
 	}
 
 	/**
-	 * Callback for the 'admin_init' hook.
-	 *
-	 * Registers the plugin's option name so it gets saved.
-	 */
-	public function register_setting() {
-		register_setting( self::KEY, self::KEY );
-	}
-
-	/**
-	 * Callback for the 'admin_menu' hook.
-	 *
-	 * Adds the plugin's options page.
-	 */
-	public function add_options_page() {
-		$this->page_hook = add_options_page( self::TITLE, self::TITLE, $this->get_admin_cap(), self::KEY, array( $this, 'output_options_page' ) );
-	}
-
-	/**
-	 * Callback used by add_options_page().
-	 *
-	 * Gets an array of post types and their posts and includes the options page HTML.
-	 */
-	public function output_options_page() {
-		include_once( plugin_dir_path( __FILE__ ) . 'view/options-page.php' );
-	}
-
-	/**
 	 * Callback for the 'pl_autocomplete' AJAX action.
 	 *
 	 * Responds with a json encoded array of posts matching the query.
 	 */
 	public function ajax_autocomplete() {
-		$posts = $this->get_posts( array(
+		$posts = $this->get_posts( [
 			's' => $this->filter_input( 'term' ),
 			'offset' => $this->filter_input( 'offset', 'int' ),
 			'posts_per_page' => 10,
-		) );
+		] );
 
 		wp_send_json_success( $posts );
 	}
@@ -274,16 +237,16 @@ class PostLockdown {
 
 		wp_enqueue_style( self::KEY, $assets_path . 'css/postlockdown' . $ext . '.css', null, null );
 
-		wp_enqueue_script( 'plmultiselect', $assets_path . 'js/jquery.plmultiselect' . $ext . '.js', array( 'jquery-ui-autocomplete' ), null, true );
-		wp_enqueue_script( self::KEY, $assets_path . 'js/postlockdown' . $ext . '.js', array( 'plmultiselect' ), null, true );
+		wp_enqueue_script( 'plmultiselect', $assets_path . 'js/jquery.plmultiselect' . $ext . '.js', ['jquery-ui-autocomplete' ], null, true );
+		wp_enqueue_script( self::KEY, $assets_path . 'js/postlockdown' . $ext . '.js', ['plmultiselect' ], null, true );
 
-		$data = array();
+		$data = [ ];
 
 		if ( $this->have_posts() ) {
-			$posts = $this->get_posts( array(
+			$posts = $this->get_posts( [
 				'nopaging' => true,
 				'post__in' => array_merge( $this->locked_post_ids, $this->protected_post_ids ),
-			) );
+			] );
 
 			foreach ( $posts as $post ) {
 				if ( $this->is_post_locked( $post->ID ) ) {
@@ -305,12 +268,12 @@ class PostLockdown {
 	 * Removes the deleted post's ID from both locked and protected arrays.
 	 */
 	public function update_option( $post_id ) {
-		unset( $this->locked_post_ids[ $post_id ], $this->protected_post_ids[ $post_id ] );
+		unset( $this->locked_post_ids[$post_id], $this->protected_post_ids[$post_id] );
 
-		update_option( self::KEY, array(
+		update_option( self::KEY, [
 			'locked_post_ids' => $this->locked_post_ids,
 			'protected_post_ids' => $this->protected_post_ids,
-		) );
+		] );
 	}
 
 	/**
@@ -346,9 +309,7 @@ class PostLockdown {
 	 * @return bool
 	 */
 	public function is_post_locked( $post_id ) {
-		$locked_post_ids = $this->get_locked_post_ids();
-
-		return isset( $locked_post_ids[ $post_id ] );
+		return isset( $this->get_locked_post_ids()[$post_id] );
 	}
 
 	/**
@@ -358,9 +319,7 @@ class PostLockdown {
 	 * @return bool
 	 */
 	public function is_post_protected( $post_id ) {
-		$protected_post_ids = $this->get_protected_post_ids();
-
-		return isset( $protected_post_ids[ $post_id ] );
+		return isset( $this->get_protected_post_ids()[$post_id] );
 	}
 
 	/**
@@ -380,7 +339,7 @@ class PostLockdown {
 	 *
 	 */
 	private function load_options() {
-		$options = get_option( self::KEY, array() );
+		$options = get_option( self::KEY, [ ] );
 
 		if ( ! empty( $options['locked_post_ids'] ) && is_array( $options['locked_post_ids'] ) ) {
 			$this->locked_post_ids = $options['locked_post_ids'];
@@ -397,23 +356,23 @@ class PostLockdown {
 	 * @param array $args Array of args to merge with defaults passed to get_posts().
 	 * @return array Array of posts.
 	 */
-	private function get_posts( $args = array() ) {
-		$excluded_post_types = array( 'nav_menu_item', 'revision' );
+	private function get_posts( $args = [ ] ) {
+		$excluded_post_types = [ 'nav_menu_item', 'revision' ];
 
 		if ( class_exists( 'WooCommerce' ) ) {
-			$excluded_post_types = array_merge( $excluded_post_types, array(
+			$excluded_post_types = array_merge( $excluded_post_types, [
 				'product_variation',
 				'shop_order',
 				'shop_coupon',
-			) );
+			] );
 		}
 
 		$excluded_post_types = apply_filters( 'postlockdown_excluded_post_types', $excluded_post_types );
 
-		$defaults = array(
+		$defaults = [
 			'post_type' => array_diff( get_post_types(), $excluded_post_types ),
-			'post_status' => array( 'publish', 'pending', 'draft', 'future' ),
-		);
+			'post_status' => [ 'publish', 'pending', 'draft', 'future' ],
+		];
 
 		$args = wp_parse_args( $args, $defaults );
 
