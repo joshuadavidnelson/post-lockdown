@@ -126,6 +126,8 @@ class PostLockdown_OptionsPage {
 			}
 		}
 
+		$data['item_tpl'] = file_get_contents( $this->postlockdown->plugin_path . 'view/multiselect-item.hbs' );
+
 		wp_localize_script( PostLockdown::KEY, PostLockdown::KEY, $data );
 	}
 

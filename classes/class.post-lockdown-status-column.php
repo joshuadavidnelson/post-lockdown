@@ -55,6 +55,8 @@ class PostLockdown_StatusColumn {
 	public function _column_hidden( $result, $option, $user ) {
 		global $wpdb;
 
+		// @todo: Add column_hidden_default filter
+
 		$prefix = $wpdb->get_blog_prefix();
 		if ( ! $user->has_prop( $prefix . $option ) && ! $user->has_prop( $option ) ) {
 			if ( ! is_array( $result ) ) {

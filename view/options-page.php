@@ -37,3 +37,11 @@
 		<input name="submit" type="submit" class="button button-primary" value="<?php esc_attr_e( 'Save Changes' ); ?>" />
 	</form>
 </div>
+<script id="plmultiselect-item-template" type="text/x-handlebars-template">
+	<li class="post-{{item.ID}}" data-ID="{{item.ID}}">
+		<span class="post-title">{{item.post_title}}</span>
+		<span class="dashicons dashicons-no" title="Remove"></span>
+		<span class="post-type">{{item.post_type}}</span>
+		<input type="hidden" class="post-id" name="{{self.options.inputName}}[{{item.ID}}]" value="{{item.ID}}" disabled/>
+	</li>
+</script>
